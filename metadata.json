@@ -1,0 +1,6 @@
+{
+  "name": "Play Hub",
+  "description": "Play Hub: Instant zero-download Play Store for Indian & global games, free music/photo/dev apps, private browser, and live owner control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

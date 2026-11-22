@@ -1,0 +1,148 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Creator studio profile for an authenticated Tube Store user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the user." },
+        "displayName": { "type": "string", "description": "Public creator display name." },
+        "studioName": { "type": "string", "description": "Creator studio or channel brand name." },
+        "bio": { "type": "string", "description": "Optional short creator bio." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "displayName", "studioName", "createdAt", "updatedAt"]
+    },
+    "UserBookmark": {
+      "title": "UserBookmark",
+      "description": "Tracks an authenticated user's liked or saved app/video item.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the bookmark owner." },
+        "targetId": { "type": "string", "description": "Document ID of the liked app or video." },
+        "targetType": { "type": "string", "enum": ["app", "video"], "description": "Entity type." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when bookmarked." }
+      },
+      "required": ["userId", "targetId", "targetType", "createdAt"]
+    },
+    "StoreApp": {
+      "title": "StoreApp",
+      "description": "An app listing published by a creator in Tube Store.",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string", "description": "Firebase Auth UID of the publishing developer." },
+        "creatorName": { "type": "string", "description": "Studio or developer display name." },
+        "title": { "type": "string", "description": "App title." },
+        "tagline": { "type": "string", "description": "Short one-line pitch." },
+        "description": { "type": "string", "description": "Detailed app overview." },
+        "category": { "type": "string", "enum": ["Tools", "Entertainment", "Social", "Games", "Education", "Themes"] },
+        "downloadUrl": { "type": "string", "description": "Official HTTPS store or web URL opened externally." },
+        "versionName": { "type": "string", "description": "Version label e.g. 1.0.0." },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "downloadCount": { "type": "integer", "description": "Total open/download link clicks." },
+        "likeCount": { "type": "integer", "description": "Total community likes." },
+        "accentIndex": { "type": "integer", "description": "Visual card theme index 0..5." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": [
+        "creatorId", "creatorName", "title", "tagline", "description",
+        "category", "downloadUrl", "versionName", "visibility",
+        "downloadCount", "likeCount", "accentIndex", "createdAt", "updatedAt"
+      ]
+    },
+    "TubeVideo": {
+      "title": "TubeVideo",
+      "description": "A video or cartoon channel item published by a creator in Tube Store.",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string", "description": "Firebase Auth UID of the channel creator." },
+        "channelName": { "type": "string", "description": "Channel display name." },
+        "title": { "type": "string", "description": "Video or episode title." },
+        "description": { "type": "string", "description": "Video description." },
+        "category": { "type": "string", "enum": ["Cartoons", "Music", "Gaming", "Tech", "Comedy", "Education"] },
+        "language": { "type": "string", "description": "Language or region such as Marwadi, Rajasthani, Hindi, English, or Global." },
+        "videoUrl": { "type": "string", "description": "HTTPS stream, video, or embed URL." },
+        "durationLabel": { "type": "string", "description": "Formatted duration e.g. 05:12." },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "viewCount": { "type": "integer", "description": "Total stream views." },
+        "likeCount": { "type": "integer", "description": "Total likes." },
+        "accentIndex": { "type": "integer", "description": "Visual card theme index 0..5." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": [
+        "creatorId", "channelName", "title", "description",
+        "category", "language", "videoUrl", "durationLabel", "visibility",
+        "viewCount", "likeCount", "accentIndex", "createdAt", "updatedAt"
+      ]
+    },
+    "LiveAppConfig": {
+      "title": "LiveAppConfig",
+      "description": "Owner-controlled live app configuration for announcements, maintenance, featured tag, and content blocks.",
+      "type": "object",
+      "properties": {
+        "bannerText": { "type": "string", "description": "Announcement banner message shown to users." },
+        "bannerEnabled": { "type": "boolean", "description": "Whether the live announcement banner is visible." },
+        "maintenanceMode": { "type": "boolean", "description": "Whether maintenance screen is enabled for non-admins." },
+        "maintenanceMessage": { "type": "string", "description": "Message displayed during maintenance mode." },
+        "featuredLabel": { "type": "string", "description": "Highlighted owner badge or featured spotlight text." },
+        "blockedIds": { "type": "array", "description": "IDs of copied or banned apps/videos hidden across the app." },
+        "updatedBy": { "type": "string", "description": "Firebase Auth UID of the owner updating config." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": [
+        "bannerText", "bannerEnabled", "maintenanceMode", "maintenanceMessage",
+        "featuredLabel", "blockedIds", "updatedBy", "updatedAt"
+      ]
+    },
+    "ModerationReport": {
+      "title": "ModerationReport",
+      "description": "Anti-copy or abuse report submitted by users and reviewed by the app owner.",
+      "type": "object",
+      "properties": {
+        "reporterId": { "type": "string", "description": "Firebase Auth UID of the reporting user." },
+        "reporterName": { "type": "string", "description": "Display name of the reporter." },
+        "targetId": { "type": "string", "description": "ID of the reported app or video." },
+        "targetType": { "type": "string", "enum": ["app", "video"], "description": "Target entity type." },
+        "targetTitle": { "type": "string", "description": "Title of the reported item." },
+        "reason": { "type": "string", "description": "Detailed copy/abuse report reason." },
+        "status": { "type": "string", "enum": ["open", "resolved", "dismissed"], "description": "Moderation state." },
+        "resolutionNote": { "type": "string", "description": "Owner moderation decision note." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": [
+        "reporterId", "reporterName", "targetId", "targetType", "targetTitle",
+        "reason", "status", "resolutionNote", "createdAt", "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Creator profile isolated to the owning user."
+    },
+    "/users/{userId}/bookmarks/{bookmarkId}": {
+      "schema": { "$ref": "#/entities/UserBookmark" },
+      "description": "User-scoped saved/liked app and video references."
+    },
+    "/apps/{appId}": {
+      "schema": { "$ref": "#/entities/StoreApp" },
+      "description": "Creator-published app listings in Tube Store."
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/TubeVideo" },
+      "description": "Creator-published video and cartoon channel items in Tube Store."
+    },
+    "/app_config/{docId}": {
+      "schema": { "$ref": "#/entities/LiveAppConfig" },
+      "description": "Global live remote configuration controlled exclusively by the verified app owner."
+    },
+    "/moderation_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ModerationReport" },
+      "description": "User-submitted anti-copy moderation reports reviewed by the verified app owner."
+    }
+  }
+}

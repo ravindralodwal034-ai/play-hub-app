@@ -1,0 +1,341 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+             'email' in request.auth.token &&
+             'email_verified' in request.auth.token &&
+             request.auth.token.email == 'ravindralodwal034@gmail.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUrl(url) {
+      return url is string && url.size() >= 8 && url.size() <= 500 && url.matches('^https?://.*');
+    }
+
+    function isValidVisibility(v) {
+      return v is string && (v == 'public' || v == 'private');
+    }
+
+    // Entity Validators
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+             data.studioName is string && data.studioName.size() >= 1 && data.studioName.size() <= 60 &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 240));
+    }
+
+    function isValidBookmark(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.targetType is string && (data.targetType == 'app' || data.targetType == 'video');
+    }
+
+    function isValidStoreApp(data) {
+      return data.creatorId is string && data.creatorId.size() >= 1 && data.creatorId.size() <= 128 &&
+             data.creatorName is string && data.creatorName.size() >= 1 && data.creatorName.size() <= 60 &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 60 &&
+             data.tagline is string && data.tagline.size() >= 2 && data.tagline.size() <= 120 &&
+             data.description is string && data.description.size() >= 5 && data.description.size() <= 800 &&
+             data.category is string && (data.category in ['Tools', 'Entertainment', 'Social', 'Games', 'Education', 'Themes']) &&
+             isValidUrl(data.downloadUrl) &&
+             data.versionName is string && data.versionName.size() >= 1 && data.versionName.size() <= 20 &&
+             isValidVisibility(data.visibility) &&
+             data.downloadCount is int && data.downloadCount >= 0 &&
+             data.likeCount is int && data.likeCount >= 0 &&
+             data.accentIndex is int && data.accentIndex >= 0 && data.accentIndex <= 5;
+    }
+
+    function isValidTubeVideo(data) {
+      return data.creatorId is string && data.creatorId.size() >= 1 && data.creatorId.size() <= 128 &&
+             data.channelName is string && data.channelName.size() >= 2 && data.channelName.size() <= 60 &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 80 &&
+             data.description is string && data.description.size() >= 5 && data.description.size() <= 800 &&
+             data.category is string && (data.category in ['Cartoons', 'Music', 'Gaming', 'Tech', 'Comedy', 'Education']) &&
+             data.language is string && data.language.size() >= 1 && data.language.size() <= 40 &&
+             isValidUrl(data.videoUrl) &&
+             data.durationLabel is string && data.durationLabel.size() >= 1 && data.durationLabel.size() <= 16 &&
+             isValidVisibility(data.visibility) &&
+             data.viewCount is int && data.viewCount >= 0 &&
+             data.likeCount is int && data.likeCount >= 0 &&
+             data.accentIndex is int && data.accentIndex >= 0 && data.accentIndex <= 5;
+    }
+
+    function isValidLiveAppConfig(data) {
+      return data.bannerText is string && data.bannerText.size() <= 180 &&
+             data.bannerEnabled is bool &&
+             data.maintenanceMode is bool &&
+             data.maintenanceMessage is string && data.maintenanceMessage.size() <= 220 &&
+             data.featuredLabel is string && data.featuredLabel.size() <= 60 &&
+             data.blockedIds is list && data.blockedIds.size() <= 100 &&
+             data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
+    function isValidModerationReport(data) {
+      return data.reporterId is string && data.reporterId.size() >= 1 && data.reporterId.size() <= 128 &&
+             data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 60 &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.targetType is string && (data.targetType == 'app' || data.targetType == 'video') &&
+             data.targetTitle is string && data.targetTitle.size() >= 1 && data.targetTitle.size() <= 80 &&
+             data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 300 &&
+             data.status is string && (data.status in ['open', 'resolved', 'dismissed']) &&
+             data.resolutionNote is string && data.resolutionNote.size() <= 200;
+    }
+
+    // 1. User Profiles (strictly owner-isolated)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'studioName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'studioName', 'bio', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'studioName', 'bio', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      // User Bookmarks / Likes subcollection
+      match /bookmarks/{bookmarkId} {
+        allow get: if isSignedIn() && isValidId(bookmarkId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(bookmarkId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'targetId', 'targetType', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'targetId', 'targetType', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidBookmark(incoming());
+
+        allow update: if false;
+
+        allow delete: if isSignedIn() && isValidId(bookmarkId) && request.auth.uid == userId;
+      }
+    }
+
+    // 2. Tube Store App Directory
+    match /apps/{appId} {
+      allow get: if isSignedIn() &&
+                    isValidId(appId) &&
+                    (existing().visibility == 'public' || existing().creatorId == request.auth.uid || isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.visibility == 'public' || resource.data.creatorId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(appId) &&
+                       incoming().creatorId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'creatorId', 'creatorName', 'title', 'tagline', 'description',
+                         'category', 'downloadUrl', 'versionName', 'visibility',
+                         'downloadCount', 'likeCount', 'accentIndex', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'creatorId', 'creatorName', 'title', 'tagline', 'description',
+                         'category', 'downloadUrl', 'versionName', 'visibility',
+                         'downloadCount', 'likeCount', 'accentIndex', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().downloadCount == 0 &&
+                       incoming().likeCount == 0 &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidStoreApp(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(appId) &&
+                       isValidStoreApp(incoming()) &&
+                       incoming().creatorId == existing().creatorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         (
+                           existing().creatorId == request.auth.uid &&
+                           incoming().downloadCount == existing().downloadCount &&
+                           incoming().likeCount == existing().likeCount &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'creatorName', 'title', 'tagline', 'description',
+                             'category', 'downloadUrl', 'versionName', 'visibility', 'accentIndex', 'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           isAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['visibility', 'updatedAt'])
+                         ) ||
+                         (
+                           existing().visibility == 'public' &&
+                           incoming().downloadCount == existing().downloadCount + 1 &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['downloadCount', 'updatedAt'])
+                         ) ||
+                         (
+                           existing().visibility == 'public' &&
+                           (incoming().likeCount == existing().likeCount + 1 || incoming().likeCount == existing().likeCount - 1) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['likeCount', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(appId) && (existing().creatorId == request.auth.uid || isAdmin());
+    }
+
+    // 3. Tube Store Video & Cartoon Channels
+    match /videos/{videoId} {
+      allow get: if isSignedIn() &&
+                    isValidId(videoId) &&
+                    (existing().visibility == 'public' || existing().creatorId == request.auth.uid || isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.visibility == 'public' || resource.data.creatorId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(videoId) &&
+                       incoming().creatorId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'creatorId', 'channelName', 'title', 'description',
+                         'category', 'language', 'videoUrl', 'durationLabel', 'visibility',
+                         'viewCount', 'likeCount', 'accentIndex', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'creatorId', 'channelName', 'title', 'description',
+                         'category', 'language', 'videoUrl', 'durationLabel', 'visibility',
+                         'viewCount', 'likeCount', 'accentIndex', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().viewCount == 0 &&
+                       incoming().likeCount == 0 &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidTubeVideo(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(videoId) &&
+                       isValidTubeVideo(incoming()) &&
+                       incoming().creatorId == existing().creatorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       (
+                         (
+                           existing().creatorId == request.auth.uid &&
+                           incoming().viewCount == existing().viewCount &&
+                           incoming().likeCount == existing().likeCount &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'channelName', 'title', 'description',
+                             'category', 'language', 'videoUrl', 'durationLabel', 'visibility', 'accentIndex', 'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           isAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['visibility', 'updatedAt'])
+                         ) ||
+                         (
+                           existing().visibility == 'public' &&
+                           incoming().viewCount == existing().viewCount + 1 &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['viewCount', 'updatedAt'])
+                         ) ||
+                         (
+                           existing().visibility == 'public' &&
+                           (incoming().likeCount == existing().likeCount + 1 || incoming().likeCount == existing().likeCount - 1) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['likeCount', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() && isValidId(videoId) && (existing().creatorId == request.auth.uid || isAdmin());
+    }
+
+    // 4. Live App Remote Config (Read by signed-in users, controlled exclusively by verified app owner)
+    match /app_config/{docId} {
+      allow get: if isSignedIn() && docId == 'live';
+      allow list: if false;
+
+      allow create, update: if isAdmin() &&
+                               docId == 'live' &&
+                               incoming().updatedBy == request.auth.uid &&
+                               incoming().keys().hasAll([
+                                 'bannerText', 'bannerEnabled', 'maintenanceMode', 'maintenanceMessage',
+                                 'featuredLabel', 'blockedIds', 'updatedBy', 'updatedAt'
+                               ]) &&
+                               incoming().keys().hasOnly([
+                                 'bannerText', 'bannerEnabled', 'maintenanceMode', 'maintenanceMessage',
+                                 'featuredLabel', 'blockedIds', 'updatedBy', 'updatedAt'
+                               ]) &&
+                               incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                               isValidLiveAppConfig(incoming());
+
+      allow delete: if false;
+    }
+
+    // 5. Anti-Copy & Abuse Moderation Reports
+    match /moderation_reports/{reportId} {
+      allow get: if isSignedIn() &&
+                    isValidId(reportId) &&
+                    (isAdmin() || existing().reporterId == request.auth.uid);
+
+      allow list: if isSignedIn() &&
+                     (isAdmin() || resource.data.reporterId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(reportId) &&
+                       incoming().reporterId == request.auth.uid &&
+                       incoming().status == 'open' &&
+                       incoming().resolutionNote == '' &&
+                       incoming().keys().hasAll([
+                         'reporterId', 'reporterName', 'targetId', 'targetType', 'targetTitle',
+                         'reason', 'status', 'resolutionNote', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'reporterId', 'reporterName', 'targetId', 'targetType', 'targetTitle',
+                         'reason', 'status', 'resolutionNote', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidModerationReport(incoming());
+
+      allow update: if isAdmin() &&
+                       isValidId(reportId) &&
+                       isValidModerationReport(incoming()) &&
+                       incoming().reporterId == existing().reporterId &&
+                       incoming().targetId == existing().targetId &&
+                       incoming().targetType == existing().targetType &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'resolutionNote', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(reportId);
+    }
+  }
+}
