@@ -20,25 +20,28 @@ jobs:
 
       - name: Prepare Android SDK, Licenses and Keystore
         run: |
-          {
-            echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
-            SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-            mkdir -p "$SDK_DIR/licenses"
-            printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n8933bad161af4178b1185d1a37fbf41ea5269c55\n601085b94cd77f0b54ff86406957099ebe79c4d6" > "$SDK_DIR/licenses/android-sdk-license"
-            printf "\n84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_DIR/licenses/android-sdk-preview-license"
+          SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "Using SDK_DIR=$SDK_DIR"
+          sudo chown -R "$(whoami)" "$SDK_DIR" 2>/dev/null || true
+          mkdir -p "$SDK_DIR/licenses"
+          printf "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n8933bad161af4178b1185d1a37fbf41ea5269c55\n601085b94cd77f0b54ff86406957099ebe79c4d6" > "$SDK_DIR/licenses/android-sdk-license"
+          printf "\n84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_DIR/licenses/android-sdk-preview-license"
 
-            SDKM=$(command -v sdkmanager || find "$SDK_DIR" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)
-            if [ -n "$SDKM" ]; then
-              (yes || true) | "$SDKM" --licenses >/dev/null 2>&1 || true
-              "$SDKM" "platforms;android-36.1" "platforms;android-36" "platform-tools" >/dev/null 2>&1 || true
-            fi
+          SDKM=$(command -v sdkmanager || find "$SDK_DIR" -name sdkmanager -type f 2>/dev/null | head -n 1 || true)
+          if [ -n "$SDKM" ]; then
+            (yes || true) | "$SDKM" --licenses >/dev/null 2>&1 || true
+            "$SDKM" --install "platforms;android-36.1" "platforms;android-36" "build-tools;36.0.0" "platform-tools" || true
+          fi
+          ls -la "$SDK_DIR/platforms" || true
 
-            if [ -f debug.keystore.base64 ]; then
-              base64 -d debug.keystore.base64 > debug.keystore
-              ls -lh debug.keystore
-            fi
-            touch .env
-          } 2>&1 | tee gradle_build.log
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore || rm -f debug.keystore
+          fi
+          if [ ! -s debug.keystore ] || ! keytool -list -keystore debug.keystore -storepass android >/dev/null 2>&1; then
+            rm -f debug.keystore
+            keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          touch .env
 
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
@@ -52,7 +55,8 @@ jobs:
             -Dorg.gradle.jvmargs="-Xmx3g -Dfile.encoding=UTF-8" \
             -Dorg.gradle.workers.max=2 \
             --no-daemon \
-            --stacktrace 2>&1 | tee -a gradle_build.log
+            --no-configuration-cache \
+            --console=plain 2>&1 | tee gradle_build.log
 
       - name: Show Failure Summary
         if: failure()
@@ -60,7 +64,7 @@ jobs:
           echo "### Gradle Build Error" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           if [ -s gradle_build.log ]; then
-            tail -n 60 gradle_build.log >> "$GITHUB_STEP_SUMMARY"
+            grep -n -C 5 -E "FAILURE:|What went wrong:|Execution failed|Caused by:|^e: |ERROR:" gradle_build.log | tail -n 45 >> "$GITHUB_STEP_SUMMARY" || tail -n 35 gradle_build.log >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Build failed before Gradle ran." >> "$GITHUB_STEP_SUMMARY"
           fi
